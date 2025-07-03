@@ -12,6 +12,7 @@ const router = express.Router();
  */
 
 router.get('/', authenticateToken, mealController.getMeals);
+router.get('/today', authenticateToken, mealController.getMealsForToday);
 router.post('/', authenticateToken, mealController.createMeal);
 router.get('/:id', authenticateToken, mealController.getMealById);
 router.put('/:id', authenticateToken, mealController.updateMeal);

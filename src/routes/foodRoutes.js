@@ -11,6 +11,7 @@ const router = express.Router();
  *   description: Food database and search
  */
 
+router.get("/", authenticateToken, foodController.getAllFoods);
 router.get('/search', authenticateToken, foodController.searchFoods);
 router.post('/', authenticateToken, foodController.createFood);
 

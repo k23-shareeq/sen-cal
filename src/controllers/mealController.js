@@ -1,227 +1,164 @@
-const mealService = require('../services/mealService');
-const { validateMeal } = require('../validators/mealValidator');
+const foodService = require("../services/foodService");
+const mealService = require("../services/mealService");
+const { validateMeal } = require("../validators/mealValidator");
 
 class MealController {
-  /**
-   * @swagger
-   * /api/meals:
-   *   get:
-   *     summary: Get user meals for a specific date
-   *     tags: [Meals]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: query
-   *         name: date
-   *         schema:
-   *           type: string
-   *           format: date
-   *         required: false
-   *         description: Date to filter meals (YYYY-MM-DD format)
-   *     responses:
-   *       200:
-   *         description: Meals retrieved successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 meals:
-   *                   type: array
-   *                   items:
-   *                     $ref: '#/components/schemas/Meal'
-   */
   async getMeals(req, res) {
     const user_id = req.user.id;
     const date = req.query.date;
     if (!date) {
-      return res.status(400).json({ error: 'Date query parameter is required' });
+      return res
+        .status(400)
+        .json({ error: "Date query parameter is required" });
     }
     const meals = await mealService.getMealsByUserAndDate(user_id, date);
     res.json({ meals });
   }
 
-  /**
-   * @swagger
-   * /api/meals:
-   *   post:
-   *     summary: Create a new meal
-   *     tags: [Meals]
-   *     security:
-   *       - bearerAuth: []
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required: [meal_type_id, meal_date, name]
-   *             properties:
-   *               meal_type_id:
-   *                 type: string
-   *                 format: uuid
-   *               meal_date:
-   *                 type: string
-   *                 format: date
-   *               name:
-   *                 type: string
-   *               notes:
-   *                 type: string
-   *     responses:
-   *       201:
-   *         description: Meal created successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 message:
-   *                   type: string
-   *                 meal:
-   *                   $ref: '#/components/schemas/Meal'
-   */
+  async getMealsForToday(req, res) {
+    const user_id = req.user.id;
+    const meals = await mealService.getMealsForToday(user_id);
+    res.json({ meals });
+  }
+
   async createMeal(req, res) {
+    const user_id = req.user.id;
+    console.log("User is: ", user_id);
+    if (!user_id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
     const { error } = validateMeal(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
-    const meal = await mealService.createMeal({ ...req.body, user_id: req.user.id });
-    res.status(201).json({ message: 'Meal created successfully', meal });
-  }
+    // Find the food item
+    const food = await foodService.searchFoods(req.body.meal_name);
+    console.log("Found Food: ", food[0])
+    if (!food || !food?.length) {
+      const requestedMeal = {
+        meal_type: req.body.meal_type,
+        meal_name: req.body.meal_name,
+        meal_quantity: req.body.meal_quantity,
+        meal_serving_size: req.body.meal_serving_size,
+        notes: req.body.notes,
+      };
+      const genMeal = await mealService.generateMeal(requestedMeal);
+      const data = genMeal?.client_response;
+      if (!data || !data?.isValid) {
+        return res
+          .status(400)
+          .json({ error: true, message: "Enter Valid Meal Options!" });
+      }
+      if (!data?.resultFound) {
+        return res
+          .status(400)
+          .json({
+            error: true,
+            message:
+              "Could Not Determine the Macros! Try a different Meal (more generic)",
+          });
+      }
+      // Create Food
+      const foodsList = genMeal?.database_entries;
+      console.log("food Lists:", foodsList);
+      if (!foodsList || !foodsList?.length) {
+        return res
+          .status(400)
+          .json({ error: true, message: "Could Not Determine the Macros!" });
+      }
+      console.log(data);
+      // Create Meal
+      const mealToStore = {
+        meal_type: req.body.meal_type,
+        name: data?.corrected_meal || req.body.meal_name,
+        user_id: user_id,
+        total_calories: data?.nutrition?.calories,
+        total_protein: data?.nutrition?.protein,
+        total_carbs: data?.nutrition?.carbs,
+        total_fat: data?.nutrition?.fat,
+        total_fiber: data?.nutrition?.fiber,
+        total_sugar: data?.nutrition?.sugar,
+        confidence_level: data?.confidence * 100,
+      };
+      const meal = await mealService.createMeal(mealToStore);
 
-  /**
-   * @swagger
-   * /api/meals/{id}:
-   *   get:
-   *     summary: Get a meal by ID
-   *     tags: [Meals]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *           format: uuid
-   *     responses:
-   *       200:
-   *         description: Meal retrieved successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 meal:
-   *                   $ref: '#/components/schemas/Meal'
-   *       404:
-   *         description: Meal not found
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Error'
-   */
-  async getMealById(req, res) {
-    const meal = await mealService.getMealById(req.params.id);
-    if (!meal || meal.user_id !== req.user.id) {
-      return res.status(404).json({ error: 'Meal not found' });
+      for (let i = 0; i < foodsList?.length; i++) {
+        const curr = foodsList[i];
+        const foodItem = {
+          name: curr?.meal_name,
+          serving_unit: curr?.measuring_unit,
+          serving_generic_unit:curr?.generic_unit,
+          serving_size: curr?.serving_size,
+          calories_per_serving: curr?.calories,
+          protein_per_serving: curr?.protein,
+          carbs_per_serving: curr?.carbs,
+          fat_per_serving: curr?.fat,
+          fiber_per_serving: curr?.fiber,
+          sugar_per_serving: curr?.sugar,
+          category: curr?.meal_category,
+          confidence_level: curr?.confidence,
+        };
+        await foodService.createFood(foodItem);
+      }
+
+      res.status(201).json({ message: "Meal created successfully", meal, hit:false });
+    } else {
+      // Conversion
+      let scaleFactor = 1 ;
+      if((food[0].serving_unit == 'g' && req.body.meal_serving_size == 'kg') || (food[0].serving_unit == 'ml' && req.body.meal_serving_size == 'l')){
+        scaleFactor = (req.body.meal_quantity * 1000) / food[0].serving_size ;
+      }else if(food[0].serving_unit == req.body.meal_serving_size){
+        scaleFactor = req.body.meal_quantity ;
+      }
+      console.log("Scale Factor of: ", scaleFactor);
+      // Create Meal
+      const mealToStore = {
+        meal_type: req.body.meal_type,
+        name: req.body.meal_name,
+        user_id,
+        total_calories: food[0].calories_per_serving * scaleFactor,
+        total_protein: food[0].protein_per_serving * scaleFactor,
+        total_carbs: food[0].carbs_per_serving * scaleFactor,
+        total_fat: food[0].fat_per_serving * scaleFactor,
+        total_fiber: food[0].fiber_per_serving * scaleFactor,
+        total_sugar: food[0].sugar_per_serving * scaleFactor,
+        confidence_level: (food[0]?.confidence_level || 0),
+      };
+      const meal = await mealService.createMeal(mealToStore);
+
+      res.status(201).json({ message: "Meal created successfully", meal, hit:true });
     }
-    res.json({ meal });
   }
 
-  /**
-   * @swagger
-   * /api/meals/{id}:
-   *   put:
-   *     summary: Update a meal
-   *     tags: [Meals]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *           format: uuid
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             $ref: '#/components/schemas/Meal'
-   *     responses:
-   *       200:
-   *         description: Meal updated successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 message:
-   *                   type: string
-   *                 meal:
-   *                   $ref: '#/components/schemas/Meal'
-   *       404:
-   *         description: Meal not found
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Error'
-   */
   async updateMeal(req, res) {
     const meal = await mealService.getMealById(req.params.id);
     if (!meal || meal.user_id !== req.user.id) {
-      return res.status(404).json({ error: 'Meal not found' });
+      return res.status(404).json({ error: "Meal not found" });
     }
     const { error } = validateMeal(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
     const updated = await mealService.updateMeal(req.params.id, req.body);
-    res.json({ message: 'Meal updated successfully', meal: updated });
+    res.json({ message: "Meal updated successfully", meal: updated });
   }
 
-  /**
-   * @swagger
-   * /api/meals/{id}:
-   *   delete:
-   *     summary: Delete a meal
-   *     tags: [Meals]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: id
-   *         required: true
-   *         schema:
-   *           type: string
-   *           format: uuid
-   *     responses:
-   *       200:
-   *         description: Meal deleted successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 message:
-   *                   type: string
-   *       404:
-   *         description: Meal not found
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Error'
-   */
   async deleteMeal(req, res) {
     const meal = await mealService.getMealById(req.params.id);
     if (!meal || meal.user_id !== req.user.id) {
-      return res.status(404).json({ error: 'Meal not found' });
+      return res.status(404).json({ error: "Meal not found" });
     }
     await mealService.deleteMeal(req.params.id);
-    res.json({ message: 'Meal deleted successfully' });
+    res.json({ message: "Meal deleted successfully" });
+  }
+
+  async getMealById(req, res) {
+    const meal = await mealService.getMealById(req.params.id);
+    if (!meal || meal.user_id !== req.user.id) {
+      return res.status(404).json({ error: "Meal not found" });
+    }
+    res.json({ meal });
   }
 }
 
-module.exports = new MealController(); 
+module.exports = new MealController();

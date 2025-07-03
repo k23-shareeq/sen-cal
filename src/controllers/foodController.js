@@ -74,6 +74,11 @@ class FoodController {
     const food = await foodService.createFood(req.body);
     res.status(201).json({ message: 'Food created successfully', food });
   }
+
+  async getAllFoods(req, res){
+    const allFoods = await foodService.getAllFoods();
+    res.json({ foods: allFoods });
+  }
 }
 
 module.exports = new FoodController(); 
