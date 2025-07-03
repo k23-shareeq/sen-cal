@@ -206,12 +206,12 @@ class MealController {
     const caloriesGoal = calculateDailyNutritionGoals(userGoal);
 
     res.json({
-      curr_calories: meals?.total_calories,
-      curr_protein: meals?.total_protein,
-      curr_carbs: meals?.total_carbs,
-      curr_fiber: meals?.total_fiber,
-      curr_sugar: meals?.total_sugar,
-      curr_fat: meals?.total_fat,
+      curr_calories: meals?.total_calories || 0,
+      curr_protein: meals?.total_protein || 0,
+      curr_carbs: meals?.total_carbs || 0,
+      curr_fiber: meals?.total_fiber || 0,
+      curr_sugar: meals?.total_sugar || 0,
+      curr_fat: meals?.total_fat || 0,
       goal_calories: caloriesGoal?.calories,
       goal_protein: caloriesGoal?.protein,
       goal_carbs: caloriesGoal?.carbs,

@@ -2,21 +2,37 @@ const pool = require('../database/connection');
 
 class WorkoutService {
   async createWorkout(workout) {
+    console.log('Creating workout:', workout);
     const query = `
-      INSERT INTO workouts (user_id, name, workout_date, duration_minutes, total_calories_burned, notes)
+      INSERT INTO workouts (user_id, name, workout_type, duration_minutes, total_calories_burned, notes)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
     const values = [
       workout.user_id,
       workout.name,
-      workout.workout_date,
+      workout.workout_type,
       workout.duration_minutes,
       workout.total_calories_burned,
       workout.notes
     ];
     const result = await pool.query(query, values);
     return result.rows[0];
+  }
+
+  async getUserWorkoutsForToday(userId) {
+    const query = `
+      SELECT * FROM workouts
+      WHERE user_id = $1
+        AND (
+          created_at AT TIME ZONE 'UTC' AT TIME ZONE '+05:00'::interval
+        )::date = (
+          NOW() AT TIME ZONE 'UTC' AT TIME ZONE '+05:00'::interval
+        )::date
+      ORDER BY created_at DESC
+    `;
+    const result = await pool.query(query, [userId]);
+    return result.rows;
   }
 
   async getWorkoutsByUserAndDate(user_id, date) {

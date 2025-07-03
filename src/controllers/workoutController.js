@@ -1,4 +1,6 @@
+const userService = require('../services/userService');
 const workoutService = require('../services/workoutService');
+const calculateCaloriesBurned = require('../utils/calculateCaloriesBurned');
 const { validateWorkout } = require('../validators/workoutValidator');
 
 class WorkoutController {
@@ -33,13 +35,11 @@ class WorkoutController {
    */
   async getWorkouts(req, res) {
     const user_id = req.user.id;
-    const date = req.query.date;
-    if (!date) {
-      return res.status(400).json({ error: 'Date query parameter is required' });
-    }
-    const workouts = await workoutService.getWorkoutsByUserAndDate(user_id, date);
+    const workouts = await workoutService.getUserWorkoutsForToday(user_id);
     res.json({ workouts });
   }
+
+
 
   /**
    * @swagger
@@ -73,7 +73,18 @@ class WorkoutController {
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
-    const workout = await workoutService.createWorkout({ ...req.body, user_id: req.user.id });
+    const userProfileDetails = await userService.getUserProfileDetails(req.user.id);
+    const weight = userProfileDetails?.weight || 75;
+    const workoutData = {
+      ...req.body ,
+      weight
+    }
+    const burned = calculateCaloriesBurned(workoutData)
+    const dataToSave = { 
+      ...req.body,
+      total_calories_burned: burned
+     }
+    let workout = await workoutService.createWorkout({ ...dataToSave, user_id: req.user.id });
     res.status(201).json({ message: 'Workout created successfully', workout });
   }
 

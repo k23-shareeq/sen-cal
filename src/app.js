@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes');
 const mealRoutes = require('./routes/mealRoutes');
 const workoutRoutes = require('./routes/workoutRoutes');
 const foodRoutes = require('./routes/foodRoutes');
+const userRoutes = require('./routes/userRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/foods', foodRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
