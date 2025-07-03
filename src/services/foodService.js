@@ -36,6 +36,7 @@ class FoodService {
     const result = await pool.query(sql);
     return result.rows;
   }
+
 }
 
-module.exports = new FoodService(); 
+module.exports = new FoodService();   

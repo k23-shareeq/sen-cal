@@ -99,6 +99,22 @@ class MealService {
     const result = await pool.query(query, [userId, todayStr]);
     return result.rows;
   }
+
+  async getMealSummaryForUserToday(userId) {
+    const sql = `
+      SELECT 
+        SUM(total_calories) AS total_calories,
+        SUM(total_protein) AS total_protein,
+        SUM(total_carbs) AS total_carbs,
+        SUM(total_fat) AS total_fat,
+        SUM(total_fiber) AS total_fiber,
+        SUM(total_sugar) AS total_sugar
+      FROM meals
+      WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
+    `;
+    const result = await pool.query(sql, [userId]);
+    return result.rows[0];
+  }
 }
 
 module.exports = new MealService(); 

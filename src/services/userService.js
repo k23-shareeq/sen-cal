@@ -28,6 +28,16 @@ class UserService {
     const result = await pool.query(query, [id]);
     return result.rows[0];
   }
+
+  async findUserGoal(id){
+    const query = `
+    SELECT u.daily_goal
+    FROM users u
+    WHERE u.id = $1
+    `;
+    const result = await pool.query(query, [id]);
+    return result.rows[0].daily_goal;
+  }
 }
 
 module.exports = new UserService(); 

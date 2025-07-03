@@ -64,3 +64,5 @@ function calculateDailyNutritionGoals(dailyCalorieGoal, options = {}) {
     }
   };
 }
+
+module.exports = calculateDailyNutritionGoals;
